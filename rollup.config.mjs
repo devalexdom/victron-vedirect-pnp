@@ -1,5 +1,7 @@
 import typescript from 'rollup-plugin-typescript2'
 import babel from '@rollup/plugin-babel'
+import terser from '@rollup/plugin-terser';
+import commonjs from '@rollup/plugin-commonjs';
 
 export default [
     // ES Modules
@@ -10,9 +12,10 @@ export default [
         }
         ],
         plugins: [
+            commonjs(),
             typescript({ useTsconfigDeclarationDir: true }),
-            /*babel({ extensions: ['.ts'] }),*/
+            babel({ extensions: ['.ts'] }),
+            terser()
         ],
     },
-
 ]

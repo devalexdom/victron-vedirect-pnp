@@ -38,6 +38,7 @@ export declare enum ErrorMessage {
     "User settings invalid" = 119
 }
 export declare enum MPPTMessage {
+    "Unknown" = -1,
     "Off" = 0,
     "Voltage or current limited" = 1,
     "MPP Tracker active" = 2

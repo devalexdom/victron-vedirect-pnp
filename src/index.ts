@@ -216,10 +216,10 @@ export default class VEDirectPnP {
 
 
   #mapVictronDeviceData(deviceData: VEDirectData, deviceId: string, deviceVEAdapterSN: string, deviceVEAdapterPath: string): VEDirectPnPDeviceData {
-    if (!isNaN(deviceData["MPPT"])) {
+    if (!isNaN(Number(deviceData["PPV"]))) {
       return new MPPTDeviceData(deviceData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath);
     }
-    else if (!isNaN(deviceData["SOC"])) {
+    else if (!isNaN(Number(deviceData["SOC"]))) {
       return new BMVDeviceData(deviceData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath);
     }
     else {
@@ -270,25 +270,29 @@ export default class VEDirectPnP {
   }
 
   #updateVEDirectDataDeviceData(VEDirectData: VEDirectData, deviceId: string, vedirectSerialNumber: string, deviceVEAdapterPath: string) {
+    try {
+      const previousVEDirectRawData = this.#VEDirectDevicesData[deviceId] ?? {};
+      const deviceNewData = {
+        ...previousVEDirectRawData, ...{ ...VEDirectData, dataTimeStamp: new Date().getTime() }
+      };
 
-    const previousVEDirectRawData = this.#VEDirectDevicesData[deviceId] ?? {};
-    const deviceNewData = {
-      ...previousVEDirectRawData, ...{ ...VEDirectData, dataTimeStamp: new Date().getTime() }
-    };
+      this.#VEDirectDevicesData = {
+        ...this.#VEDirectDevicesData,
+        [deviceId]: deviceNewData
+      };
 
-    this.#VEDirectDevicesData = {
-      ...this.#VEDirectDevicesData,
-      [deviceId]: deviceNewData
-    };
+      const deviceNewDataMapped = this.#mapVictronDeviceData(deviceNewData, deviceId, vedirectSerialNumber, deviceVEAdapterPath);
+      this.#VEDirectDevicesDataMapped = {
+        ...this.#VEDirectDevicesDataMapped,
+        [deviceId]: deviceNewDataMapped
+      };
 
-    const deviceNewDataMapped = this.#mapVictronDeviceData(deviceNewData, deviceId, vedirectSerialNumber, deviceVEAdapterPath);
-    this.#VEDirectDevicesDataMapped = {
-      ...this.#VEDirectDevicesDataMapped,
-      [deviceId]: deviceNewDataMapped
-    };
-
-    if (this.#flags.deviceRelationsSetCount < Object.keys(this.#VEDirectDevicesData).length) {
-      this.#setDeviceRelations();
+      if (this.#flags.deviceRelationsSetCount < Object.keys(this.#VEDirectDevicesData).length) {
+        this.#setDeviceRelations();
+      }
+    }
+    catch (error) {
+      console.error(`VEDirectPnP - Critical error trying to update device ${deviceId} data`, error)
     }
   }
 
@@ -423,7 +427,7 @@ export default class VEDirectPnP {
           return;
         }
 
-        if (!this.#VEDirectDevicesData[deviceId]) {
+        if (!this.#VEDirectDevicesData.hasOwnProperty(deviceId)) {
           resolve();
         }
         this.#updateVEDirectDataDeviceData(VEDirectRawData, deviceId, vedirectSerialNumber, devicePath);

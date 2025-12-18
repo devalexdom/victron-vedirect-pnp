@@ -41,6 +41,7 @@ export enum ErrorMessage {
 
 
 export enum MPPTMessage {
+    "Unknown" = -1,
     "Off" = 0,
     "Voltage or current limited" = 1,
     "MPP Tracker active" = 2,

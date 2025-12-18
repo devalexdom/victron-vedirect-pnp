@@ -5,6 +5,7 @@ export interface VEDirectPnPDeviceData {
     deviceId: string;
     deviceSN?: string;
     deviceVEAdapterSN: string;
+    deviceVEAdapterPath: string;
     VEDirectData: VEDirectData;
 }
 export declare class UnsupportedDeviceData implements VEDirectPnPDeviceData {
@@ -13,8 +14,9 @@ export declare class UnsupportedDeviceData implements VEDirectPnPDeviceData {
     deviceId: string;
     deviceSN: string;
     deviceVEAdapterSN: string;
+    deviceVEAdapterPath: string;
     VEDirectData: VEDirectData;
-    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string);
+    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string, deviceVEAdapterPath: string);
 }
 export declare class BMVDeviceData implements VEDirectPnPDeviceData {
     deviceType: string;
@@ -22,6 +24,7 @@ export declare class BMVDeviceData implements VEDirectPnPDeviceData {
     deviceId: string;
     deviceSN: string;
     deviceVEAdapterSN: string;
+    deviceVEAdapterPath: string;
     deviceFirmwareVersion: number;
     batteryMinVoltage: number;
     batteryMaxVoltage: number;
@@ -56,7 +59,7 @@ export declare class BMVDeviceData implements VEDirectPnPDeviceData {
     alarmState: boolean;
     alarmMessage: string;
     VEDirectData: VEDirectData;
-    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string);
+    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string, deviceVEAdapterPath: string);
 }
 export declare class MPPTDeviceData implements VEDirectPnPDeviceData {
     deviceType: string;
@@ -64,6 +67,7 @@ export declare class MPPTDeviceData implements VEDirectPnPDeviceData {
     deviceId: string;
     deviceSN: string;
     deviceVEAdapterSN: string;
+    deviceVEAdapterPath: string;
     deviceFirmwareVersion: number;
     batteryVoltage: number;
     batteryCurrent: number;
@@ -85,5 +89,5 @@ export declare class MPPTDeviceData implements VEDirectPnPDeviceData {
     offReasonMessage: string;
     daySequenceNumber: number;
     VEDirectData: VEDirectData;
-    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string);
+    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string, deviceVEAdapterPath: string);
 }

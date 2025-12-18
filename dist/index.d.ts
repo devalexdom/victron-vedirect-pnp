@@ -1,4 +1,11 @@
 import { MPPTDeviceData, VEDirectPnPDeviceData, BMVDeviceData } from "./device-data";
+interface VEDirectPnPParameters {
+    VEDirectDevicesPath?: string;
+    customVEDirectDevicesPaths?: Array<string>;
+    dataTimeout?: number;
+    deleteDataWhenTimeout?: boolean;
+    deviceConnectionAutoRepair?: boolean;
+}
 interface VEDirectPnPDeviceRelations {
     mainBatteryDeviceId?: string;
     mainMPPTDeviceId?: string;
@@ -7,10 +14,7 @@ interface VEDirectPnPDeviceRelations {
 }
 export default class VEDirectPnP {
     #private;
-    constructor({ VEDirectDevicesPath, customVEDirectDevicesPaths }?: {
-        VEDirectDevicesPath?: string;
-        customVEDirectDevicesPaths?: any[];
-    }, deviceRelations?: VEDirectPnPDeviceRelations);
+    constructor({ VEDirectDevicesPath, customVEDirectDevicesPaths, dataTimeout, deleteDataWhenTimeout, deviceConnectionAutoRepair }: VEDirectPnPParameters, deviceRelations?: VEDirectPnPDeviceRelations);
     init(): void;
     on(event: string, callback: Function): void;
     getVersion(): number;

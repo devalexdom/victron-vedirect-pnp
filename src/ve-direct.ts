@@ -69,7 +69,7 @@ export class VEDirectData {
 
   constructor(VEDirectRawData: Object) {
     for (const key in VEDirectRawData) {
-      if (isNaN(VEDirectRawData[key])) {
+      if (isNaN(Number(VEDirectRawData[key]))) {
         this[key] = VEDirectRawData[key];
       }
       else {

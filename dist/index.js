@@ -2,11 +2,7 @@
 
 var child_process = require('child_process');
 var stream = require('stream');
-var SerialPort = require('serialport');
-
-function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
-
-var SerialPort__default = /*#__PURE__*/_interopDefaultLegacy(SerialPort);
+var serialport = require('serialport');
 
 class VEDirectData {
     //Protocol version 3.33 (06 June 2023)
@@ -76,7 +72,7 @@ class VEDirectData {
     DC_IN_P;
     constructor(VEDirectRawData) {
         for (const key in VEDirectRawData) {
-            if (isNaN(VEDirectRawData[key])) {
+            if (isNaN(Number(VEDirectRawData[key]))) {
                 this[key] = VEDirectRawData[key];
             }
             else {
@@ -294,14 +290,16 @@ class UnsupportedDeviceData {
     deviceId;
     deviceSN;
     deviceVEAdapterSN;
+    deviceVEAdapterPath;
     VEDirectData;
-    constructor(VEDirectRawData, deviceId, deviceVEAdapterSN) {
+    constructor(VEDirectRawData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath) {
         //VE.Direct -> UnsupportedDeviceData properties mapping
         const data = new VEDirectData(VEDirectRawData);
         this.deviceName = getDeviceName(data["PID"]);
         this.deviceId = deviceId;
         this.deviceSN = data["SER#"] ?? null;
         this.deviceVEAdapterSN = deviceVEAdapterSN;
+        this.deviceVEAdapterPath = deviceVEAdapterPath;
         this.deviceType = "Unsupported";
         this.VEDirectData = data;
     }
@@ -312,6 +310,7 @@ class BMVDeviceData {
     deviceId;
     deviceSN;
     deviceVEAdapterSN;
+    deviceVEAdapterPath;
     deviceFirmwareVersion;
     batteryMinVoltage;
     batteryMaxVoltage;
@@ -346,7 +345,7 @@ class BMVDeviceData {
     alarmState;
     alarmMessage;
     VEDirectData;
-    constructor(VEDirectRawData, deviceId, deviceVEAdapterSN) {
+    constructor(VEDirectRawData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath) {
         //VE.Direct -> MPPTDeviceData properties mapping
         const data = new VEDirectData(VEDirectRawData);
         this.deviceName = getDeviceName(data["PID"]);
@@ -387,6 +386,7 @@ class BMVDeviceData {
         this.chargedEnergy = getNullableNumber(data.H18) / 100; //KWh
         this.alarmState = getStringBoolean(data.Alarm);
         this.alarmMessage = AlarmReasonMessage[data.AR];
+        this.deviceVEAdapterPath = deviceVEAdapterPath;
         this.VEDirectData = data;
     }
 }
@@ -396,6 +396,7 @@ class MPPTDeviceData {
     deviceId;
     deviceSN;
     deviceVEAdapterSN;
+    deviceVEAdapterPath;
     deviceFirmwareVersion;
     batteryVoltage;
     batteryCurrent;
@@ -417,13 +418,14 @@ class MPPTDeviceData {
     offReasonMessage;
     daySequenceNumber;
     VEDirectData;
-    constructor(VEDirectRawData, deviceId, deviceVEAdapterSN) {
+    constructor(VEDirectRawData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath) {
         //VE.Direct -> MPPTDeviceData properties mapping
         const data = new VEDirectData(VEDirectRawData);
         this.deviceName = getDeviceName(data["PID"]);
         this.deviceId = deviceId;
         this.deviceSN = data["SER#"];
         this.deviceVEAdapterSN = deviceVEAdapterSN;
+        this.deviceVEAdapterPath = deviceVEAdapterPath;
         this.deviceType = DeviceType[0];
         this.deviceFirmwareVersion = getDeviceFW(data);
         this.batteryVoltage = data["V"] / 1000; //mV -> V
@@ -465,6 +467,12 @@ function getNullableNumber(nullableNumber) {
     return nullableNumber ?? 0;
 }
 
+const timeout = (ms, errorText = "Timeout") => {
+    return new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(errorText)), ms);
+    });
+};
+
 class VEDirectPnP {
     #version;
     #parameters;
@@ -474,11 +482,15 @@ class VEDirectPnP {
     #serialPorts;
     #flags;
     #deviceRelations;
-    constructor({ VEDirectDevicesPath = "/dev/serial/by-id/", customVEDirectDevicesPaths = [] } = {}, deviceRelations) {
-        this.#version = 0.20;
+    #dataTimeoutIntervalCheck;
+    constructor({ VEDirectDevicesPath = "/dev/serial/by-id/", customVEDirectDevicesPaths = [], dataTimeout = 60, deleteDataWhenTimeout, deviceConnectionAutoRepair }, deviceRelations) {
+        this.#version = 0.30;
         this.#parameters = {
             VEDirectDevicesPath,
-            customVEDirectDevicesPaths
+            customVEDirectDevicesPaths,
+            dataTimeout,
+            deleteDataWhenTimeout,
+            deviceConnectionAutoRepair
         };
         this.#listenersStack = [];
         this.#VEDirectDevicesData = {};
@@ -487,9 +499,11 @@ class VEDirectPnP {
         this.#flags = {
             requestedInit: false,
             initialized: false,
-            deviceRelationsSetCount: 0
+            deviceRelationsSetCount: 0,
+            resetRequested: false
         };
         this.#deviceRelations = deviceRelations ?? {};
+        this.#dataTimeoutIntervalCheck = null;
         this.init();
     }
     init() {
@@ -497,6 +511,7 @@ class VEDirectPnP {
             this.#flags = { ...this.#flags, requestedInit: true };
             this.#initVEDirectDataStreamFromAllDevices().then(() => {
                 this.#flags = { ...this.#flags, initialized: true };
+                this.#dataTimeoutIntervalCheck = setInterval(() => this.#checkDataTimeoutNTryRepair, this.#parameters.dataTimeout);
                 this.#emitEvent("stream-init", {
                     message: "VE.Direct devices data stream init"
                 });
@@ -506,6 +521,21 @@ class VEDirectPnP {
                     message: "Failed to get data from VE.Direct devices"
                 });
             });
+        }
+    }
+    #checkDataTimeoutNTryRepair() {
+        const timeoutTime = (new Date().getTime() + (this.#parameters.dataTimeout * 1000));
+        const allData = Object.values(this.#VEDirectDevicesDataMapped);
+        const timeoutedData = allData.find(data => data.VEDirectData.dataTimeStamp > timeoutTime);
+        if (timeoutedData) {
+            console.warn(`VEDirectPnP - Device ${timeoutedData.deviceId} data timeout`);
+            if (this.#parameters.deleteDataWhenTimeout) {
+                delete this.#VEDirectDevicesDataMapped[timeoutedData.deviceId];
+            }
+            if (this.#parameters.deviceConnectionAutoRepair) {
+                console.warn(`VEDirectPnP - AutoRepair feature will now restart all ports`);
+                this.reset();
+            }
         }
     }
     on(event, callback) {
@@ -520,6 +550,7 @@ class VEDirectPnP {
         return this.#version;
     }
     destroy(callback) {
+        clearInterval(this.#dataTimeoutIntervalCheck);
         if (this.#serialPorts.length > 0) {
             this.#closeSerialPorts().then(() => {
                 this.#flags = { ...this.#flags, requestedInit: false, initialized: false };
@@ -576,7 +607,18 @@ class VEDirectPnP {
     reset() {
         this.destroy(() => {
             this.#clean();
-            this.init();
+            if (!this.#flags.requestedInit && !this.#flags.initialized && !this.#flags.resetRequested) {
+                this.#flags = { ...this.#flags, requestedInit: true, resetRequested: true };
+                this.#initVEDirectDataStreamFromAllDevices().then(() => {
+                    this.#flags = { ...this.#flags, initialized: true, resetRequested: false };
+                    this.#dataTimeoutIntervalCheck = setInterval(() => this.#checkDataTimeoutNTryRepair, this.#parameters.dataTimeout);
+                }).catch(() => {
+                    this.#flags = { ...this.#flags, requestedInit: false, initialized: false, resetRequested: false };
+                    this.#emitEvent("error", {
+                        message: "Failed to get data from VE.Direct devices"
+                    });
+                });
+            }
         });
     }
     //END OF PUBLIC METHODS
@@ -591,48 +633,57 @@ class VEDirectPnP {
     #getDeviceVEAdapterSN(VEDirectDevicePath) {
         return VEDirectDevicePath?.match(/Direct_cable_([^-]+)/)[1] ?? null;
     }
-    #mapVictronDeviceData(deviceData, deviceId, deviceVEAdapterSN) {
+    #mapVictronDeviceData(deviceData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath) {
         if (!isNaN(deviceData["MPPT"])) {
-            return new MPPTDeviceData(deviceData, deviceId, deviceVEAdapterSN);
+            return new MPPTDeviceData(deviceData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath);
         }
         else if (!isNaN(deviceData["SOC"])) {
-            return new BMVDeviceData(deviceData, deviceId, deviceVEAdapterSN);
+            return new BMVDeviceData(deviceData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath);
         }
         else {
-            return new UnsupportedDeviceData(deviceData, deviceId, deviceVEAdapterSN);
+            return new UnsupportedDeviceData(deviceData, deviceId, deviceVEAdapterSN, deviceVEAdapterPath);
         }
     }
     #clean() {
         this.#VEDirectDevicesData = {};
     }
     #closeSerialPorts() {
-        return new Promise((resolve, reject) => {
-            if (this.#serialPorts.length > 0) {
-                const serialPortClosePromises = this.#serialPorts.map((serialPort) => {
-                    return new Promise((resolve, reject) => {
-                        serialPort.close((error) => {
-                            if (error) {
-                                console.error(error);
-                                reject();
-                            }
-                            else {
-                                resolve();
-                            }
+        const handlePortsClose = () => {
+            return new Promise(async (resolve, reject) => {
+                if (this.#serialPorts.length > 0) {
+                    const serialPortClosePromises = this.#serialPorts.filter(s => s.isOpen).map((serialPort) => () => {
+                        return new Promise((resolve, reject) => {
+                            serialPort.close((error) => {
+                                if (error) {
+                                    console.error(error);
+                                    reject();
+                                }
+                                else {
+                                    resolve();
+                                }
+                            });
                         });
                     });
-                });
-                Promise.all(serialPortClosePromises)
-                    .then(() => {
-                    this.#serialPorts = [];
-                    resolve();
-                }).catch(() => reject);
-            }
-            else {
-                reject();
-            }
-        });
+                    try {
+                        for (const closePromise of serialPortClosePromises) {
+                            await closePromise();
+                        }
+                        this.#serialPorts = [];
+                        resolve();
+                    }
+                    catch (error) {
+                        console.error("VEDirectPnP - Error trying to close synchronously existing connections", error);
+                        reject();
+                    }
+                }
+                else {
+                    reject();
+                }
+            });
+        };
+        return Promise.race([handlePortsClose(), timeout(60000, "VEDirectPnP - Timeout error trying to close synchronously existing connections")]);
     }
-    #updateVEDirectDataDeviceData(VEDirectData, deviceId, vedirectSerialNumber) {
+    #updateVEDirectDataDeviceData(VEDirectData, deviceId, vedirectSerialNumber, deviceVEAdapterPath) {
         const previousVEDirectRawData = this.#VEDirectDevicesData[deviceId] ?? {};
         const deviceNewData = {
             ...previousVEDirectRawData, ...{ ...VEDirectData, dataTimeStamp: new Date().getTime() }
@@ -641,7 +692,7 @@ class VEDirectPnP {
             ...this.#VEDirectDevicesData,
             [deviceId]: deviceNewData
         };
-        const deviceNewDataMapped = this.#mapVictronDeviceData(deviceNewData, deviceId, vedirectSerialNumber);
+        const deviceNewDataMapped = this.#mapVictronDeviceData(deviceNewData, deviceId, vedirectSerialNumber, deviceVEAdapterPath);
         this.#VEDirectDevicesDataMapped = {
             ...this.#VEDirectDevicesDataMapped,
             [deviceId]: deviceNewDataMapped
@@ -721,9 +772,11 @@ class VEDirectPnP {
     }
     #initDataStreamFromVEDirect(devicePath, deviceIndex) {
         return new Promise((resolve, reject) => {
-            const port = new SerialPort__default["default"](devicePath, {
+            const serialport$1 = new serialport.SerialPort({
+                path: devicePath,
                 baudRate: 19200,
                 dataBits: 8,
+                stopBits: 1,
                 parity: 'none'
             }, (err) => {
                 if (err) {
@@ -735,13 +788,13 @@ class VEDirectPnP {
                     reject();
                 }
             });
-            port.on("open", () => {
+            serialport$1.on("open", () => {
                 this.#emitEvent("device-connection-open", {
                     message: "VE.Direct device connected through serial port",
                     dataDump: devicePath
                 });
             });
-            port.on('error', (err) => {
+            serialport$1.on('error', (err) => {
                 this.#emitEvent("device-connection-error", {
                     message: "VE.Direct device connection error through serial port",
                     dataDump: {
@@ -750,13 +803,13 @@ class VEDirectPnP {
                     }
                 });
             });
-            this.#serialPorts.push(port);
-            const delimiter = new SerialPort__default["default"].parsers.Delimiter({
+            this.#serialPorts.push(serialport$1);
+            const delimiter = new serialport.DelimiterParser({
                 delimiter: Buffer.from([0x0d, 0x0a], 'hex'),
                 includeDelimiter: false
             });
             const VEDParser = new VEDirectParser();
-            port.pipe(delimiter).pipe(VEDParser);
+            serialport$1.pipe(delimiter).pipe(VEDParser);
             VEDParser.on("data", (VEDirectRawData) => {
                 const deviceSerialNumber = this.#getVictronDeviceSN(VEDirectRawData);
                 const vedirectSerialNumber = this.#getDeviceVEAdapterSN(devicePath);
@@ -771,7 +824,7 @@ class VEDirectPnP {
                 if (!this.#VEDirectDevicesData[deviceId]) {
                     resolve();
                 }
-                this.#updateVEDirectDataDeviceData(VEDirectRawData, deviceId, vedirectSerialNumber);
+                this.#updateVEDirectDataDeviceData(VEDirectRawData, deviceId, vedirectSerialNumber, devicePath);
             });
         });
     }

@@ -8,6 +8,7 @@ export interface VEDirectPnPDeviceData {
     deviceId: string;
     deviceSN?: string;
     deviceVEAdapterSN: string;
+    deviceVEAdapterPath: string;
     VEDirectData: VEDirectData;
 }
 
@@ -17,14 +18,16 @@ export class UnsupportedDeviceData implements VEDirectPnPDeviceData {
     deviceId: string;
     deviceSN: string;
     deviceVEAdapterSN: string;
+    deviceVEAdapterPath: string;
     VEDirectData: VEDirectData;
-    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string) {
+    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string, deviceVEAdapterPath: string) {
         //VE.Direct -> UnsupportedDeviceData properties mapping
         const data = new VEDirectData(VEDirectRawData);
         this.deviceName = getDeviceName(data["PID"]);
         this.deviceId = deviceId;
         this.deviceSN = data["SER#"] ?? null;
         this.deviceVEAdapterSN = deviceVEAdapterSN;
+        this.deviceVEAdapterPath = deviceVEAdapterPath;
         this.deviceType = "Unsupported";
         this.VEDirectData = data;
     }
@@ -36,6 +39,7 @@ export class BMVDeviceData implements VEDirectPnPDeviceData {
     deviceId: string;
     deviceSN: string;
     deviceVEAdapterSN: string;
+    deviceVEAdapterPath: string;
     deviceFirmwareVersion: number;
     batteryMinVoltage: number;
     batteryMaxVoltage: number;
@@ -70,7 +74,7 @@ export class BMVDeviceData implements VEDirectPnPDeviceData {
     alarmState: boolean;
     alarmMessage: string;
     VEDirectData: VEDirectData;
-    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string) {
+    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string, deviceVEAdapterPath: string) {
         //VE.Direct -> MPPTDeviceData properties mapping
         const data = new VEDirectData(VEDirectRawData);
         this.deviceName = getDeviceName(data["PID"]);
@@ -111,6 +115,7 @@ export class BMVDeviceData implements VEDirectPnPDeviceData {
         this.chargedEnergy = getNullableNumber(data.H18) / 100; //KWh
         this.alarmState = getStringBoolean(data.Alarm);
         this.alarmMessage = AlarmReasonMessage[data.AR];
+        this.deviceVEAdapterPath = deviceVEAdapterPath;
         this.VEDirectData = data;
     }
 }
@@ -121,6 +126,7 @@ export class MPPTDeviceData implements VEDirectPnPDeviceData {
     deviceId: string;
     deviceSN: string;
     deviceVEAdapterSN: string;
+    deviceVEAdapterPath: string;
     deviceFirmwareVersion: number;
     batteryVoltage: number;
     batteryCurrent: number;
@@ -142,13 +148,14 @@ export class MPPTDeviceData implements VEDirectPnPDeviceData {
     offReasonMessage: string;
     daySequenceNumber: number;
     VEDirectData: VEDirectData;
-    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string) {
+    constructor(VEDirectRawData: VEDirectData, deviceId: string, deviceVEAdapterSN: string, deviceVEAdapterPath: string) {
         //VE.Direct -> MPPTDeviceData properties mapping
         const data = new VEDirectData(VEDirectRawData);
         this.deviceName = getDeviceName(data["PID"]);
         this.deviceId = deviceId;
         this.deviceSN = data["SER#"];
         this.deviceVEAdapterSN = deviceVEAdapterSN;
+        this.deviceVEAdapterPath = deviceVEAdapterPath;
         this.deviceType = DeviceType[0];
         this.deviceFirmwareVersion = getDeviceFW(data);
         this.batteryVoltage = data["V"] / 1000; //mV -> V

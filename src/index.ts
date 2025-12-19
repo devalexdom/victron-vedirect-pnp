@@ -13,6 +13,7 @@ interface VEDirectPnPParameters {
   dataTimeout?: number;
   deleteDataWhenTimeout?: boolean;
   deviceConnectionAutoRepair?: boolean;
+  bypassVEDirectDataChecksum?: boolean;
 }
 
 interface VEDirectPnPEventData {
@@ -45,14 +46,15 @@ export default class VEDirectPnP {
   #flags: VEDirectPnPFlags;
   #deviceRelations: VEDirectPnPDeviceRelations;
   #dataTimeoutIntervalCheck: NodeJS.Timeout | null;
-  constructor({ VEDirectDevicesPath = "/dev/serial/by-id/", customVEDirectDevicesPaths = [], dataTimeout = 60, deleteDataWhenTimeout, deviceConnectionAutoRepair }: VEDirectPnPParameters, deviceRelations?: VEDirectPnPDeviceRelations) {
+  constructor({ VEDirectDevicesPath = "/dev/serial/by-id/", customVEDirectDevicesPaths = [], dataTimeout = 120, deleteDataWhenTimeout, deviceConnectionAutoRepair, bypassVEDirectDataChecksum }: VEDirectPnPParameters, deviceRelations?: VEDirectPnPDeviceRelations) {
     this.#version = 0.30;
     this.#parameters = {
       VEDirectDevicesPath,
       customVEDirectDevicesPaths,
       dataTimeout,
       deleteDataWhenTimeout,
-      deviceConnectionAutoRepair
+      deviceConnectionAutoRepair,
+      bypassVEDirectDataChecksum
     };
     this.#listenersStack = [];
     this.#VEDirectDevicesData = {};
@@ -74,7 +76,7 @@ export default class VEDirectPnP {
       this.#flags = { ...this.#flags, requestedInit: true };
       this.#initVEDirectDataStreamFromAllDevices().then(() => {
         this.#flags = { ...this.#flags, initialized: true };
-        this.#dataTimeoutIntervalCheck = setInterval(() => this.#checkDataTimeoutNTryRepair, this.#parameters.dataTimeout);
+        this.#dataTimeoutIntervalCheck = setInterval(() => this.#checkDataTimeoutNTryRepair(), this.#parameters.dataTimeout * 1000);
         this.#emitEvent("stream-init", {
           message: "VE.Direct devices data stream init"
         });
@@ -236,7 +238,7 @@ export default class VEDirectPnP {
         this.#flags = { ...this.#flags, requestedInit: true, resetRequested: true };
         this.#initVEDirectDataStreamFromAllDevices().then(() => {
           this.#flags = { ...this.#flags, initialized: true, resetRequested: false };
-          this.#dataTimeoutIntervalCheck = setInterval(() => this.#checkDataTimeoutNTryRepair, this.#parameters.dataTimeout);
+          this.#dataTimeoutIntervalCheck = setInterval(() => this.#checkDataTimeoutNTryRepair(), this.#parameters.dataTimeout * 1000);
           this.#emitEvent("stream-restarted", {
             message: "VE.Direct devices data stream restarted successfuly"
           });
@@ -481,7 +483,7 @@ export default class VEDirectPnP {
         includeDelimiter: false
       });
 
-      const VEDParser = new VEDirectParser();
+      const VEDParser = new VEDirectParser(this.#parameters.bypassVEDirectDataChecksum);
       serialport.pipe(delimiter).pipe(VEDParser);
 
       let connectionEstablished = false;

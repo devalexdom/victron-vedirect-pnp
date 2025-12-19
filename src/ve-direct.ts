@@ -83,16 +83,20 @@ export class VEDirectData {
 export class VEDirectParser extends Transform {
   buffer: Buffer;
   rawDataBlock: Object;
-  constructor() {
+  #bypassChecksumOption: boolean;
+  constructor(bypassChecksum = false) {
     super({
       readableObjectMode: true,
     });
-
+    this.#bypassChecksumOption = bypassChecksum;
     this.buffer = Buffer.alloc(0);
     this.rawDataBlock = {};
   }
 
   isChecksumValid() {
+    if (this.#bypassChecksumOption) {
+      return true;
+    }
     return (this.buffer.reduce((prev, curr) => (prev + curr) & 255, 0) === 0);
   }
 

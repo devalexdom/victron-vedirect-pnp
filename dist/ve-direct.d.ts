@@ -67,9 +67,10 @@ export declare class VEDirectData {
     constructor(VEDirectRawData: Object);
 }
 export declare class VEDirectParser extends Transform {
+    #private;
     buffer: Buffer;
     rawDataBlock: Object;
-    constructor();
+    constructor(bypassChecksum?: boolean);
     isChecksumValid(): boolean;
     _transform(dataChunk: any, encoding: any, callback: any): void;
 }

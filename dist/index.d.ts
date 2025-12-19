@@ -5,6 +5,7 @@ interface VEDirectPnPParameters {
     dataTimeout?: number;
     deleteDataWhenTimeout?: boolean;
     deviceConnectionAutoRepair?: boolean;
+    bypassVEDirectDataChecksum?: boolean;
 }
 interface VEDirectPnPDeviceRelations {
     mainBatteryDeviceId?: string;
@@ -14,7 +15,7 @@ interface VEDirectPnPDeviceRelations {
 }
 export default class VEDirectPnP {
     #private;
-    constructor({ VEDirectDevicesPath, customVEDirectDevicesPaths, dataTimeout, deleteDataWhenTimeout, deviceConnectionAutoRepair }: VEDirectPnPParameters, deviceRelations?: VEDirectPnPDeviceRelations);
+    constructor({ VEDirectDevicesPath, customVEDirectDevicesPaths, dataTimeout, deleteDataWhenTimeout, deviceConnectionAutoRepair, bypassVEDirectDataChecksum }: VEDirectPnPParameters, deviceRelations?: VEDirectPnPDeviceRelations);
     init(): void;
     resetVEDirectSerialPortInterface(path: string): void;
     on(event: string, callback: Function): void;

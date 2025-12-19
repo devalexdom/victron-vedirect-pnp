@@ -1,6 +1,6 @@
 {
   "name": "@devalexdom/victron-vedirect-pnp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A plug and play way to easily read data from your connected Victron VE.Direct devices",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

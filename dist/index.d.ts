@@ -16,6 +16,7 @@ export default class VEDirectPnP {
     #private;
     constructor({ VEDirectDevicesPath, customVEDirectDevicesPaths, dataTimeout, deleteDataWhenTimeout, deviceConnectionAutoRepair }: VEDirectPnPParameters, deviceRelations?: VEDirectPnPDeviceRelations);
     init(): void;
+    resetVEDirectSerialPortInterface(path: string): void;
     on(event: string, callback: Function): void;
     getVersion(): number;
     destroy(callback?: Function): void;
